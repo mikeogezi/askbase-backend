@@ -295,6 +295,10 @@ app.post('/charge', async (req, res) => {
   }
 });
 
+app.all('/ping', (req, res) => {
+  res.json({ message: 'pong!' });
+});
+
 // TODO: Validate that the request is coming from stripe
 app.post('/stripe-webhook', async (req, res) => {
   console.log('Received webhook');
