@@ -1,0 +1,26 @@
+doctype html
+html
+  head
+    title Account
+    link(rel="stylesheet", href="/css/styles.css")
+  body
+    .container
+      if error
+        .error #{error}
+      h2 Account
+
+      .account-section
+        .account-item
+          h3 Email
+          p #{user.email}
+
+        .account-item
+          h3 Current Plan
+          p #{user.currentPlan.toTitleCase()}
+            if user.currentPlan === 'free' || user.currentPlan === 'basic'
+              div(style="margin-top: 10px;")
+                a(href="/pay/start") Upgrade
+
+        .account-item
+          h3 Queries This Month
+          p #{user.queryUsageThisMonth} / #{user.maxQueriesPerMonth}

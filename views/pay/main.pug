@@ -1,0 +1,15 @@
+doctype html
+html
+  head
+    title Pay
+    link(rel="stylesheet", href="/css/pay.css")
+    script(src="https://js.stripe.com/v3/")
+    script(src="/js/pay.js" defer)
+  body
+      form#payment-form
+        #link-authentication-element
+        #payment-element
+        button#submit.hidden
+          #spinner.spinner.hidden
+          span#button-text Pay now
+        #payment-message.hidden

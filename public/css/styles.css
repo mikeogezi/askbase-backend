@@ -1,0 +1,111 @@
+body {
+  font-family: Arial, sans-serif;
+}
+
+.center {
+  text-align: center;
+}
+
+.container {
+  width: 300px;
+  margin: 50px auto;
+  padding: 20px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+}
+
+h2 {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+div {
+  margin-bottom: 10px;
+}
+
+label {
+  display: block;
+  margin-bottom: 5px;
+}
+
+input, select {
+  width: 100%;
+  padding: 8px;
+  box-sizing: border-box;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  background-color: white;
+}
+
+button {
+  width: 100%;
+  padding: 10px;
+  background-color: #0073b1;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: large;
+}
+
+button:hover {
+  background-color: #005b8e;
+}
+
+.error {
+  color: red;
+  text-align: center;
+  margin-bottom: 20px;
+  background-color: #eee;
+  border-radius: 5px;
+  padding: 10px;
+}
+
+select:focus, input:focus {
+  outline: none;
+  border-color: #0073b1;
+}
+
+/* Enhanced Styles for Benefits List */
+ul {
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
+}
+
+ul li {
+  background-color: #f3f3f3;
+  border: 1px solid #ddd;
+  padding: 8px;
+  margin-bottom: 5px;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+ul li:last-child {
+  margin-bottom: 0;
+}
+
+/* Optional: Style for the options */
+option {
+  padding: 8px;
+}
+
+/* Style for account items */
+.account-item {
+  padding: 10px;
+  background-color: #f9f9f9;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  margin-bottom: 15px;
+}
+
+.account-item h3 {
+  margin-top: 0;
+  color: #333;
+}
+
+.account-item p {
+  margin: 5px 0 0;
+  color: #666;
+}

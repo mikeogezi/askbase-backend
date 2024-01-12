@@ -1,0 +1,22 @@
+doctype html
+html
+  head
+    title Log in
+    link(rel="stylesheet", href="/css/styles.css")
+  body
+    .container
+      if error
+        .error #{error}
+      h2 Log in
+      form(action="/log-in" + ((referer || "") && ("?referer=" + referer)) method="post")
+        div
+          label(for="email") Email
+          input(type="email" name="email" required)
+        div
+          label(for="password") Password
+          input(type="password" name="password" required)
+        div
+          button(type="submit") Log in
+      p 
+        | Don't have an account? 
+        a(href="/sign-up") Sign up here

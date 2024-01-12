@@ -1,0 +1,6 @@
+*.db
+node_modules
+snippets.js
+prisma
+env
+.DS_Store

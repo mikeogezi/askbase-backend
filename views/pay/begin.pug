@@ -1,0 +1,66 @@
+doctype html
+html
+  head
+    title Confirm Plan
+    link(rel="stylesheet" href="/css/styles.css")
+  body
+    .container
+      if error
+        .error #{error}
+      h2 Confirm Plan
+      form(action="/pay/start" method="post")
+        div
+          label(for="plan") Plan
+          select(name="plan" id="planSelect" required)
+            option(value="basic" selected=(plan != 'pro')) Basic
+            option(value="pro" selected=(plan == 'pro')) Pro
+        div
+          label(for="period") Period
+          select(name="period" id="subscriptionSelect" required)
+            option(value="monthly" selected=(period == 'monthly')) Monthly
+            option(value="yearly" selected=(period != 'monthly')) Yearly
+        div(style="text-align: center; font-size: 24px;")
+          label(for="price")
+          span#price-display
+        div(style="text-align: center;")
+          label(for="benefits")
+          div#basic-benefits(style="display: none;")
+            ul
+              li 1,000 queries per month
+              li Community support
+              li GPT-3.5
+          div#pro-benefits(style="display: none;")
+            ul
+              li 10,000 queries per month
+              li Priority support
+              li GPT-4
+        div
+          button(type="submit") Confirm
+
+script.
+  const planSelect = document.getElementById('planSelect');
+  const subscriptionSelect = document.getElementById('subscriptionSelect');
+  const priceDisplay = document.getElementById('price-display');
+  const basicBenefits = document.getElementById('basic-benefits');
+  const proBenefits = document.getElementById('pro-benefits');
+
+  const priceMap = {
+    basic: { monthly: 10, yearly: 7 },
+    pro: { monthly: 20, yearly: 14 }
+  };
+
+  function updateDisplay() {
+    const selectedPlan = planSelect.value;
+    const selectedSubscription = subscriptionSelect.value;
+    const monthlyPrice = priceMap[selectedPlan][selectedSubscription];
+    
+    priceDisplay.textContent = `$${monthlyPrice} / month`;
+
+    basicBenefits.style.display = selectedPlan === 'basic' ? '' : 'none';
+    proBenefits.style.display = selectedPlan === 'pro' ? '' : 'none';
+  }
+
+  planSelect.addEventListener('change', updateDisplay);
+  subscriptionSelect.addEventListener('change', updateDisplay);
+
+  updateDisplay();
