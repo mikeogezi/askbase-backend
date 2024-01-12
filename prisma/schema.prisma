@@ -1,0 +1,54 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url = "postgres://askbase:Dy1ldMmIrxkoTCc81PcyxDT1q4H3rrrh@dpg-cmgslsf109ks73995th0-a.oregon-postgres.render.com/askbase"
+  // url = "postgres://michaelogezi:postgres@localhost:5432/askbase"
+}
+
+enum Plan {
+  free
+  basic
+  pro
+}
+
+enum Period {
+  monthly
+  yearly
+}
+
+model User {
+  id        Int       @id @default(autoincrement())
+  createdAt DateTime  @default(now())
+  lastLogin DateTime @default(now())
+
+  email          String @unique
+  hashedPassword String
+
+  payments Payment[]
+
+  currentPlan         Plan @default(free)
+  queryUsageThisMonth Int  @default(0)
+
+  @@index([email])
+}
+
+model Payment {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+
+  amount    BigInt
+  currency  String
+  completed Boolean @default(false)
+  completedAt DateTime?
+  stripeId  String  @unique
+  plan      Plan
+  period    Period
+
+  user   User @relation(fields: [userId], references: [id])
+  userId Int  @unique
+
+  @@index([userId])
+}
