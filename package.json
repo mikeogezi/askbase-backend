@@ -19,7 +19,7 @@
   },
   "scripts": {
     "start": "nodemon server.js",
-    "migrate": "prisma migrate dev",
+    "migrate": "prisma migrate dev --name init",
     "initDatabase": "prisma db push"
   },
   "engines": {

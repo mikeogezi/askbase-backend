@@ -8,7 +8,7 @@ html
       if error
         .error #{error}
       h2 Confirm Plan
-      form(action="/pay/start" method="post")
+      form(action="/subscription/start" method="post")
         div
           label(for="plan") Plan
           select(name="plan" id="planSelect" required)

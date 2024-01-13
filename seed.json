@@ -1,0 +1,53 @@
+{
+  "_meta": {
+    "template_version": 0
+  },
+  "fixtures": [
+    {
+      "name": "basic_plan",
+      "path": "/v1/products",
+      "method": "post",
+      "params": {
+        "name": "Basic"
+      }
+    },
+    {
+      "name": "basic_price",
+      "path": "/v1/prices",
+      "method": "post",
+      "params": {
+        "product": "${basic_plan:id}",
+        "lookup_key": "basic",
+        "currency": "usd",
+        "unit_amount": 700,
+        "recurring": {
+          "interval": "month"
+        },
+        "metadata": {}
+      }
+    },
+    {
+      "name": "pro_plan",
+      "path": "/v1/products",
+      "method": "post",
+      "params": {
+        "name": "Pro"
+      }
+    },
+    {
+      "name": "pro_price",
+      "path": "/v1/prices",
+      "method": "post",
+      "params": {
+        "product": "${pro_plan:id}",
+        "lookup_key": "pro",
+        "currency": "usd",
+        "unit_amount": 1400,
+        "recurring": {
+          "interval": "month"
+        },
+        "metadata": {}
+      }
+    }
+  ]
+}

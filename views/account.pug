@@ -3,6 +3,10 @@ html
   head
     title Account
     link(rel="stylesheet", href="/css/styles.css")
+    style.
+      div a {
+        margin-right: 10px;
+      }
   body
     .container
       if error
@@ -17,10 +21,20 @@ html
         .account-item
           h3 Current Plan
           p #{user.currentPlan.toTitleCase()}
-            if user.currentPlan === 'free' || user.currentPlan === 'basic'
-              div(style="margin-top: 10px;")
-                a(href="/pay/start") Upgrade
+            div(style="margin-top: 10px;")
+              if user.currentPlan == 'free'
+                a(href="/subscription/update?plan=basic") Upgrade to Basic
+              if ['free', 'basic'].includes(user.currentPlan)
+                a(href="/subscription/update?plan=pro") Upgrade to Pro
+              if user.currentPlan == 'pro'
+                a(href="/subscription/update?plan=basic") Downgrade to Basic
+              if ['basic', 'pro'].includes(user.currentPlan)
+                a(href="/subscription/cancel") Cancel #{user.currentPlan.toTitleCase()}
 
         .account-item
           h3 Queries This Month
           p #{user.queryUsageThisMonth} / #{user.maxQueriesPerMonth}
+
+        .account-item
+          a(href="/log-out") Log out
+

@@ -20,6 +20,7 @@ const STRIPE_SECRET_KEY = "sk_test_51GrL6gLRSbKrHZ7okKSRfteML7iozGLImfVjZ3ZNJbBz
 const app = express();
 const stripe = new Stripe(STRIPE_SECRET_KEY);
 const prisma = new PrismaClient();
+let stripePriceMap;
 
 app.use(session({
   secret: SECRET_KEY, // replace with a strong secret
@@ -55,31 +56,31 @@ app.get('/log-out', (req, res) => {
   res.redirect('/log-in');
 });
 
-app.get('/pay', (req, res) => {
+app.get('/subscription', (req, res) => {
   res.render('pay/main', { error: req.flash('payError').lastAndPop(), plan: req.query.plan, period: req.query.period });
 });
 
-app.get('/pay/start', (req, res) => {
+app.get('/subscription/start', (req, res) => {
   res.render('pay/begin', { error: req.flash('payError').lastAndPop(), plan: req.query.plan, period: req.query.period });
 });
 
-app.post('/pay/start', async (req, res) => {
-  const { plan, period } = req.body;
+app.post('/subscription/start', async (req, res) => {
+  const { plan, period = 'yearly' } = req.body;
 
   if (!verifyPaidPlan(plan)) {
     req.flash('payError', 'Invalid plan.');
-    return res.redirect('/pay/start');
+    return res.redirect('/subscription/start');
   }
 
   if (!verifyPeriod(period)) {
     req.flash('payError', 'Invalid subscription period.');
-    return res.redirect('/pay/start');
+    return res.redirect('/subscription/start');
   }
 
-  res.redirect(`/pay?plan=${plan}&period=${period}`);
+  res.redirect(`/subscription?plan=${plan}&period=${period}`);
 });
 
-app.get('/pay/complete', (req, res) => {
+app.get('/subscription/complete', (req, res) => {
   res.render('pay/complete', { error: req.flash('payError').lastAndPop() });
 });
 
@@ -89,10 +90,15 @@ app.post('/sign-up', async (req, res) => {
   const hashedPassword = await bcrypt.hash(password, SALT);
 
   try {
+    const stripeCustomer = await stripe.customers.create({
+      email,
+    });
+
     const user = await prisma.user.create({
       data: {
         email,
         hashedPassword,
+        stripeCustomerId: stripeCustomer.id,
       },
     });
 
@@ -223,6 +229,18 @@ function verifyPaidPlan(plan) {
   return plan == 'basic' || plan == 'pro';
 }
 
+async function initStripePriceMap() {
+  const prices = await stripe.prices.list({
+    lookup_keys: ['basic', 'pro'],
+    expand: ['data.product']
+  });
+  const stripePriceMap = {};
+  for (price of prices.data) {
+    stripePriceMap[price.lookup_key] = price.id;
+  }
+  return stripePriceMap;
+}
+
 const planMap = {
   basic: {
     period: {
@@ -257,36 +275,114 @@ String.prototype.toTitleCase = function() {
   return this.charAt(0).toUpperCase() + this.slice(1);
 }
 
-app.use('/charge', verifyToken);
-app.post('/charge', async (req, res) => {
-  let { plan, period } = req.body;
+app.use('/subscription/cancel', verifyToken);
+app.get('/subscription/cancel', async (req, res) => {
+  const email = req.email;
+
+  try {
+    const user = await prisma.user.findUniqueOrThrow({
+      where: {
+        email,
+      },
+    });
+
+    await stripe.subscriptions.update(user.stripeSubscriptionId, {
+      cancel_at_period_end: true,
+    });
+
+    res.redirect('/account');
+  } catch (error) {
+    console.error(error);
+    req.flash('accountError', 'Unable to cancel subscription.');
+    return res.redirect('/account');
+  }
+});
+
+app.use('/subscription/update', verifyToken);
+app.get('/subscription/update', async (req, res) => {
+  const { plan, period = 'yearly' } = req.query;
+  const email = req.email;
+
+  if (!verifyPaidPlan(plan)) {
+    req.flash('accountError', 'Invalid plan.');
+    return res.redirect('/account');
+  }
+
+  if (!verifyPeriod(period)) {
+    req.flash('accountError', 'Invalid subscription period.');
+    return res.redirect('/account');
+  }
+
+  try {
+    const user = await prisma.user.findUniqueOrThrow({
+      where: {
+        email,
+      },
+    });
+
+    const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+    await stripe.subscriptions.update(user.stripeSubscriptionId, {
+      cancel_at_period_end: false,
+      items: [{
+        id: subscription.items.data[0].id,
+        price: stripePriceMap[plan],
+      }],
+    });
+
+    await prisma.user.update({
+      where: {
+        id: user.id,
+      },
+      data: {
+        currentPlan: plan,
+      },
+    });
+
+    res.redirect('/account');
+  } catch (error) {
+    console.error(error);
+    req.flash('accountError', 'Unable to update subscription.');
+    return res.redirect('/account');
+  }
+});
+
+app.use('/subscription/charge', verifyToken);
+app.post('/subscription/charge', async (req, res) => {
+  const { plan, period = 'yearly' } = req.body;
+  const email = req.email;
 
   if (!verifyPaidPlan(plan)) {
     return res.status(400).json({ error: 'Invalid plan.' });
   }
 
   if (!verifyPeriod(period)) {
-    return res.status(400).json({ error: 'Invalid period.' });
+    return res.status(400).json({ error: 'Invalid subscription period.' });
   }
 
-  const amount = planMap[plan].period[period] * 100; // Convert to cents
-  const email = req.email;
+  const amount = planMap[plan].period[period] * 100;
 
-  // TODO: Modify this to natively handle subscriptions with Stripe
   try {
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount,
-      currency: 'usd',
-      automatic_payment_methods: {
-        enabled: true,
-      },
-      receipt_email: email,
-    });
-
-    // Save the charge id to the database
     const user = await prisma.user.findUniqueOrThrow({
       where: {
         email,
+      },
+    });
+
+    const subscription = await stripe.subscriptions.create({
+      customer: user.stripeCustomerId,
+      items: [{
+        price: stripePriceMap[plan],
+      }],
+      payment_behavior: 'default_incomplete',
+      expand: ['latest_invoice.payment_intent'],
+    });
+
+    await prisma.user.update({
+      where: {
+        id: user.id,
+      },
+      data: {
+        stripeSubscriptionId: subscription.id,
       },
     });
 
@@ -295,8 +391,8 @@ app.post('/charge', async (req, res) => {
         plan,
         period,
         amount,
-        currency: paymentIntent.currency,
-        stripeId: paymentIntent.id,
+        currency: 'usd',
+        stripeId: subscription.latest_invoice.payment_intent.id,
         user: {
           connect: {
             id: user.id,
@@ -304,62 +400,93 @@ app.post('/charge', async (req, res) => {
         },
       },
     });
-    
-    res.json({ clientSecret: paymentIntent.client_secret });
-  } catch (err) {
-    console.log(err);
-    res.status(400).json({ error: "Unable to process payment." });
-  }
-});
 
-app.all('/ping', (req, res) => {
-  res.json({ message: 'pong!' });
+    res.send({
+      subscriptionId: subscription.id,
+      clientSecret: subscription.latest_invoice.payment_intent.client_secret,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(400).json({ error: 'Unable to create subscription.' });
+  }
 });
 
 // TODO: Validate that the request is coming from stripe
 app.post('/stripe-webhook', async (req, res) => {
   console.log('Received webhook');
   let event = req.body;
+  const dataObject = event.data.object;
 
   try {
     switch (event.type) {
-      case 'payment_intent.succeeded': {
-        const paymentIntent = event.data.object;
+      case 'invoice.payment_succeeded': {
+        if (dataObject.billing_reason == 'subscription_create') {
+          const paymentIntentId = dataObject.payment_intent;
+          const subscriptionId = dataObject.subscription;
 
-        // Find user directly by the stripeId of the payment
-        const userWithPayment = await prisma.payment.findUniqueOrThrow({
-          where: {
-            stripeId: paymentIntent.id,
-          },
-          select: {
-            user: true,
-          },
-        });
+          // Find user directly by the stripeId of the payment
+          const userWithPayment = await prisma.payment.findUniqueOrThrow({
+            where: {
+              stripeId: paymentIntentId,
+            },
+            select: {
+              user: true,
+            },
+          });
 
-        // Update user
-        await prisma.user.update({
-          where: {
-            id: userWithPayment.user.id,
-          },
-          data: {
-            currentPlan: plan,
-            queryUsageThisMonth: 0,
-          },
-        });
+          await prisma.user.update({
+            where: {
+              id: userWithPayment.user.id,
+            },
+            data: {
+              currentPlan: plan,
+            },
+          });
 
-        // Update payment as completed
-        await prisma.payment.update({
-          where: {
-            stripeId: paymentIntent.id,
-          },
-          data: {
-            completed: true,
-            completedAt: new Date(),
-          },
-        });
+          // Update payment as completed
+          await prisma.payment.update({
+            where: {
+              stripeId: paymentIntentId,
+            },
+            data: {
+              completed: true,
+              completedAt: new Date(),
+            },
+          });
 
-        break;
+          const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+          const subscription = await stripe.subscriptions.update(subscriptionId, {
+            default_payment_method: paymentIntent.payment_method,
+          });
+
+          break;
+        } else if (dataObject.billing_reason == 'subscription_update') {
+          // TODO: Modify user benefits when upgraded, downgraded or cancelled
+        } else if (dataObject.billing_reason == 'subscription_cycle') {
+        }
       }
+      case 'invoice.payment_failed':
+        // If the payment fails or the customer does not have a valid payment method,
+        //  an invoice.payment_failed event is sent, the subscription becomes past_due.
+        // Use this webhook to notify your user that their payment has
+        // failed and to retrieve new card details.
+        break;
+      case 'invoice.finalized':
+        // If you want to manually send out invoices to your customers
+        // or store them locally to reference to avoid hitting Stripe rate limits.
+        break;
+      case 'customer.subscription.deleted':
+        if (event.request != null) {
+          // handle a subscription cancelled by your request
+          // from above.
+        } else {
+          // handle subscription cancelled automatically based
+          // upon your subscription settings.
+        }
+        break;
+      case 'customer.subscription.trial_will_end':
+        // Send notification to your user that the trial will end
+        break;
       default:
         console.warn(`Unhandled event type ${event.type}`);
     }
@@ -373,12 +500,17 @@ app.post('/stripe-webhook', async (req, res) => {
   }
 });
 
+app.all('/ping', (req, res) => {
+  res.json({ message: 'pong!' });
+});
+
 const PORT = 8080 || process.env.PORT;
 let SALT;
 
 async function main() {
   app.listen(PORT, async () => {
     SALT = await bcrypt.genSalt(10);
+    stripePriceMap = await initStripePriceMap();
     console.log(`Server running on ${PORT}`);
   });
 }
