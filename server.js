@@ -30,6 +30,10 @@ app.use(session({
 app.use(cors());
 app.use(flash());
 app.use(cookieParser());
+app.use((req, res, next) => {
+  req.ajax = req.headers['x-requested-with'] === 'XMLHttpRequest';
+  next();
+});
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -39,12 +43,17 @@ app.set('view engine', 'pug');
 app.set('views', path.join(__dirname, 'views'));
 
 app.get('/log-in', (req, res) => {
-  res.render('login', { error: req.flash('loginError').lastAndPop(), referer: req.query.referer });
+  res.render('login', { error: req.flash('loginError').lastAndPop(), referer: req.query.referer || req.query.next });
 });
 
 app.get('/sign-up', (req, res) => {
-  res.render('signup', { error: req.flash('signupError').lastAndPop(), referer: req.query.referer });
+  res.render('signup', { error: req.flash('signupError').lastAndPop(), referer: req.query.referer || req.query.next});
 });
+
+app.get('/logout', (req, res) => {
+  res.clearCookie('auth_token');
+  res.redirect('/log-in');
+}
 
 app.get('/pay', (req, res) => {
   res.render('pay/main', { error: req.flash('payError').lastAndPop(), plan: req.query.plan, period: req.query.period });
@@ -76,7 +85,7 @@ app.get('/pay/complete', (req, res) => {
 
 app.post('/sign-up', async (req, res) => {
   const { email, password } = req.body;
-  const referer = req.query.referer || '/account';
+  const referer = req.query.referer || req.query.next || '/account';
   const hashedPassword = await bcrypt.hash(password, SALT);
 
   try {
@@ -100,7 +109,7 @@ app.post('/sign-up', async (req, res) => {
 
 app.post('/log-in', async (req, res) => {
   const { email, password } = req.body;
-  const referer = req.query.referer || '/account';
+  const referer = req.query.referer || req.query.next || '/account';
 
   try {
     const user = await prisma.user.findUnique({
@@ -129,7 +138,11 @@ app.post('/log-in', async (req, res) => {
 function verifyToken(req, res, next) {
   const token = req.headers['authorization']?.split(' ')[1] || req.cookies.auth_token;
   if (!token) {
-    return res.status(401).json({ error: 'Missing token' });
+    if (req.ajax) {
+      return res.status(401).json({ error: 'Missing token' });
+    } else {
+      return res.redirect(`/log-in?next=${req.originalUrl}`);
+    }
   }
 
   try {
@@ -139,7 +152,11 @@ function verifyToken(req, res, next) {
     req.email = decoded.email;
     next(); // Move to the next middleware or route
   } catch (err) {
-    return res.status(401).json({ error: 'Invalid or expired token' });
+    if (req.ajax) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    } else {
+      return res.redirect(`/log-in?next=${req.originalUrl}`);
+    }
   }
 }
 
