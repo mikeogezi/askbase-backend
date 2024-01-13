@@ -50,10 +50,10 @@ app.get('/sign-up', (req, res) => {
   res.render('signup', { error: req.flash('signupError').lastAndPop(), referer: req.query.referer || req.query.next});
 });
 
-app.get('/logout', (req, res) => {
+app.get('/log-out', (req, res) => {
   res.clearCookie('auth_token');
   res.redirect('/log-in');
-}
+});
 
 app.get('/pay', (req, res) => {
   res.render('pay/main', { error: req.flash('payError').lastAndPop(), plan: req.query.plan, period: req.query.period });
