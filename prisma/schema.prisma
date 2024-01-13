@@ -4,8 +4,8 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  // url = "postgres://askbase:Dy1ldMmIrxkoTCc81PcyxDT1q4H3rrrh@dpg-cmgslsf109ks73995th0-a.oregon-postgres.render.com/askbase"
-  url = "postgres://michaelogezi:postgres@localhost:5432/askbase"
+  url = "postgres://askbase:Dy1ldMmIrxkoTCc81PcyxDT1q4H3rrrh@dpg-cmgslsf109ks73995th0-a.oregon-postgres.render.com/askbase"
+  // url = "postgres://michaelogezi:postgres@localhost:5432/askbase"
 }
 
 enum Plan {
