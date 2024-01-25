@@ -4,8 +4,8 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url = "postgres://askbase:Dy1ldMmIrxkoTCc81PcyxDT1q4H3rrrh@dpg-cmgslsf109ks73995th0-a.oregon-postgres.render.com/askbase"
-  // url = "postgres://michaelogezi:postgres@localhost:5432/askbase"
+  // url = "postgres://askbase:Dy1ldMmIrxkoTCc81PcyxDT1q4H3rrrh@dpg-cmgslsf109ks73995th0-a.oregon-postgres.render.com/askbase"
+  url = "postgres://michaelogezi:postgres@localhost:5432/askbase"
 }
 
 enum Plan {
@@ -19,10 +19,18 @@ enum Period {
   yearly
 }
 
+enum Status {
+  unknown
+  initiated
+  pending
+  succeeded
+  failed
+}
+
 model User {
   id        Int       @id @default(autoincrement())
   createdAt DateTime  @default(now())
-  lastLogin DateTime @default(now())
+  lastLogin DateTime  @default(now())
 
   email          String @unique
   hashedPassword String
@@ -42,12 +50,14 @@ model Payment {
   createdAt DateTime @default(now())
 
   amount    BigInt
-  currency  String
+  currency  String @default("usd")
   completed Boolean @default(false)
   completedAt DateTime?
   stripeId  String  @unique
+  status    Status  @default(initiated)
+  isAutoRenewal Boolean @default(false)
   plan      Plan
-  period    Period
+  period    Period @default(monthly)
 
   user   User @relation(fields: [userId], references: [id])
   userId Int

@@ -10,7 +10,8 @@ const flash = require('connect-flash');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
 const Stripe = require('stripe');
-const { PrismaClient } = require('@prisma/client');
+const cron = require('node-cron');
+const { PrismaClient, Prisma } = require('@prisma/client');
 
 const SECRET_KEY = 'your-secret-key';
 const DB_PATH = path.join(__dirname, 'users.db');
@@ -43,6 +44,11 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.set('view engine', 'pug');
 app.set('views', path.join(__dirname, 'views'));
 
+// Every first day of the month, reset query usage for all users
+cron.schedule('0 0 1 * *', async () => {
+  await resetSubscriptionUsage();
+});
+
 app.get('/log-in', (req, res) => {
   res.render('login', { error: req.flash('loginError').lastAndPop(), referer: req.query.referer || req.query.next });
 });
@@ -65,7 +71,7 @@ app.get('/subscription/start', (req, res) => {
 });
 
 app.post('/subscription/start', async (req, res) => {
-  const { plan, period = 'yearly' } = req.body;
+  const { plan, period = 'monthly' } = req.body;
 
   if (!verifyPaidPlan(plan)) {
     req.flash('payError', 'Invalid plan.');
@@ -129,6 +135,15 @@ app.post('/log-in', async (req, res) => {
       return res.redirect('/log-in');
     }
 
+    await prisma.user.update({
+      where: {
+        email,
+      },
+      data: {
+        lastLogin: new Date(),
+      },
+    });
+
     // On successful login, generate token, set cookie, and redirect
     const token = jwt.sign({ email: user.email }, SECRET_KEY, { expiresIn: '30d' });
     res.cookie('auth_token', token, { maxAge: 30 * 24 * 60 * 60 * 1000, httpOnly: true });
@@ -166,6 +181,14 @@ function verifyToken(req, res, next) {
   }
 }
 
+async function resetSubscriptionUsage() {
+  await prisma.user.updateMany({
+    data: {
+      queryUsageThisMonth: 0,
+    },
+  });
+}
+
 app.get('/', (req, res) => {
   res.redirect('/account');
 });
@@ -198,8 +221,6 @@ app.all('/incrementQueryUsage', async (req, res) => {
   res.json({ queryUsageThisMonth: updatedUser.queryUsageThisMonth });
 });
 
-
-
 // Redo /info endpoint with Prisma
 app.use('/info', verifyToken);
 app.get('/info', async (req, res) => {
@@ -216,13 +237,13 @@ app.get('/info', async (req, res) => {
     delete user.payments
     res.json({ user: {...user, maxQueriesPerMonth: planMap[user.currentPlan].queries} });
   } catch (err) {
-    req.flash('infoError', 'Error while getting info. Please try again.');
-    res.redirect('/sign-up');
+    console.error(err);
+    res.status(400).json({ error: 'Unable to retrieve user info.' });
   }
 });
 
 function verifyPeriod(period) {
-  return period == 'monthly' || period == 'yearly';
+  return period == 'monthly' // || period == 'yearly';
 }
 
 function verifyPaidPlan(plan) {
@@ -245,21 +266,21 @@ const planMap = {
   basic: {
     period: {
       monthly: 10, 
-      yearly: 7,  
+      // yearly: 7,  
     },
     queries: 1000,
   },
   pro: {
     period: {
       monthly: 20, 
-      yearly: 14,
+      // yearly: 14,
     },
     queries: 10000,
   },
   free: {
     period: {
       monthly: 0,
-      yearly: 0,
+      // yearly: 0,
     },
     queries: 100,
   },
@@ -286,9 +307,10 @@ app.get('/subscription/cancel', async (req, res) => {
       },
     });
 
-    await stripe.subscriptions.update(user.stripeSubscriptionId, {
-      cancel_at_period_end: true,
-    });
+    await stripe.subscriptions.cancel(user.stripeSubscriptionId)
+    // await stripe.subscriptions.update(user.stripeSubscriptionId, {
+    //   cancel_at_period_end: true,
+    // });
 
     res.redirect('/account');
   } catch (error) {
@@ -300,7 +322,7 @@ app.get('/subscription/cancel', async (req, res) => {
 
 app.use('/subscription/update', verifyToken);
 app.get('/subscription/update', async (req, res) => {
-  const { plan, period = 'yearly' } = req.query;
+  const { plan, period = 'monthly' } = req.query;
   const email = req.email;
 
   if (!verifyPaidPlan(plan)) {
@@ -348,7 +370,7 @@ app.get('/subscription/update', async (req, res) => {
 
 app.use('/subscription/charge', verifyToken);
 app.post('/subscription/charge', async (req, res) => {
-  const { plan, period = 'yearly' } = req.body;
+  const { plan, period = 'monthly' } = req.body;
   const email = req.email;
 
   if (!verifyPaidPlan(plan)) {
@@ -377,30 +399,32 @@ app.post('/subscription/charge', async (req, res) => {
       expand: ['latest_invoice.payment_intent'],
     });
 
-    await prisma.user.update({
-      where: {
-        id: user.id,
-      },
-      data: {
-        stripeSubscriptionId: subscription.id,
-      },
-    });
-
-    await prisma.payment.create({
-      data: {
-        plan,
-        period,
-        amount,
-        currency: 'usd',
-        stripeId: subscription.latest_invoice.payment_intent.id,
-        user: {
-          connect: {
-            id: user.id,
+    await prisma.$transaction([
+      prisma.user.update({
+        where: {
+          id: user.id,
+        },
+        data: {
+          stripeSubscriptionId: subscription.id,
+        },
+      }),
+      prisma.payment.create({
+        data: {
+          plan,
+          period,
+          amount,
+          stripeId: subscription.latest_invoice.payment_intent.id,
+          user: {
+            connect: {
+              id: user.id,
+            },
           },
         },
-      },
-    });
-
+      }),
+    ], {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    })
+    
     res.send({
       subscriptionId: subscription.id,
       clientSecret: subscription.latest_invoice.payment_intent.client_secret,
@@ -416,14 +440,13 @@ app.post('/stripe-webhook', async (req, res) => {
   console.log('Received webhook');
   let event = req.body;
   const dataObject = event.data.object;
+  const paymentIntentId = dataObject.payment_intent;
+  const subscriptionId = dataObject.subscription;
 
   try {
     switch (event.type) {
       case 'invoice.payment_succeeded': {
         if (dataObject.billing_reason == 'subscription_create') {
-          const paymentIntentId = dataObject.payment_intent;
-          const subscriptionId = dataObject.subscription;
-
           // Find user directly by the stripeId of the payment
           const userWithPayment = await prisma.payment.findUniqueOrThrow({
             where: {
@@ -434,43 +457,116 @@ app.post('/stripe-webhook', async (req, res) => {
             },
           });
 
-          await prisma.user.update({
-            where: {
-              id: userWithPayment.user.id,
-            },
-            data: {
-              currentPlan: plan,
-            },
-          });
-
-          // Update payment as completed
-          await prisma.payment.update({
-            where: {
-              stripeId: paymentIntentId,
-            },
-            data: {
-              completed: true,
-              completedAt: new Date(),
-            },
+          await prisma.$transaction([
+            prisma.payment.update({
+              where: {
+                stripeId: paymentIntentId,
+              },
+              data: {
+                completed: true,
+                completedAt: new Date(),
+                status: 'succeeded',
+              },
+            }),
+            prisma.user.update({
+              where: {
+                id: userWithPayment.user.id,
+              },
+              data: {
+                currentPlan: plan,
+              },
+            }),
+          ], {
+            isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
           });
 
           const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-          const subscription = await stripe.subscriptions.update(subscriptionId, {
+          await stripe.subscriptions.update(subscriptionId, {
             default_payment_method: paymentIntent.payment_method,
           });
-
-          break;
         } else if (dataObject.billing_reason == 'subscription_update') {
           // TODO: Modify user benefits when upgraded, downgraded or cancelled
+          // Possible statuses: incomplete, incomplete_expired, trialing, active, past_due, canceled, or unpaid.
+          const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+
+          if (subscription.status == 'canceled') {
+            await prisma.user.update({
+              where: {
+                stripeCustomerId: subscription.customer,
+              },
+              data: {
+                currentPlan: 'free',
+              },
+            });
+          } else if (subscription.status == 'active') {
+            const plan = subscription.items.data[0].price.lookup_key; // Assuming plan is determined by lookup_key
+            const user = prisma.user.findUniqueOrThrow({
+              where: {
+                stripeCustomerId: subscription.customer,
+              },
+            });
+
+            await prisma.user.update({
+              where: { 
+                id: user.id 
+              },
+              data: { 
+                currentPlan: plan
+              },
+            });
+          } else {
+            console.error(`Unhandled subscription status ${subscription.status}`);
+          }
         } else if (dataObject.billing_reason == 'subscription_cycle') {
+          const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
+            expand: ['latest_invoice.payment_intent'],
+          });
+
+          const amount = subscription.items.data[0].plan.amount;
+          const plan = subscription.items.data[0].price.lookup_key;
+          const currency = subscription.items.data[0].plan.currency;
+          const period = subscription.items.data[0].plan.interval == 'year' ? 'yearly' : 'monthly';
+
+          await prisma.payment.create({
+            data: {
+              plan,
+              amount,
+              currency,
+              period,
+              status: 'succeeded',
+              completed: true,
+              completedAt: new Date(),
+              stripeId: subscription.latest_invoice.payment_intent.id,
+              user: {
+                connect: {
+                  id: user.id,
+                },
+              },
+              isAutoRenewal: true,
+            },
+          });
         }
+        break;
       }
-      case 'invoice.payment_failed':
+      case 'invoice.payment_failed': {
         // If the payment fails or the customer does not have a valid payment method,
         //  an invoice.payment_failed event is sent, the subscription becomes past_due.
         // Use this webhook to notify your user that their payment has
         // failed and to retrieve new card details.
+        // TODO: Create a failure status for failed payments
+        await prisma.payment.update({
+          where: {
+            stripeId: paymentIntentId,
+          },
+          data: {
+            completed: true,
+            completedAt: new Date(),
+            status: 'failed',
+          },
+        });
+
         break;
+      }
       case 'invoice.finalized':
         // If you want to manually send out invoices to your customers
         // or store them locally to reference to avoid hitting Stripe rate limits.

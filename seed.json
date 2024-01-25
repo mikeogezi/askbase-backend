@@ -19,11 +19,13 @@
         "product": "${basic_plan:id}",
         "lookup_key": "basic",
         "currency": "usd",
-        "unit_amount": 700,
+        "unit_amount": 1000,
         "recurring": {
           "interval": "month"
         },
-        "metadata": {}
+        "metadata": {
+          "name": "basic"
+        }
       }
     },
     {
@@ -42,11 +44,13 @@
         "product": "${pro_plan:id}",
         "lookup_key": "pro",
         "currency": "usd",
-        "unit_amount": 1400,
+        "unit_amount": 2000,
         "recurring": {
           "interval": "month"
         },
-        "metadata": {}
+        "metadata": {
+          "name": "pro"
+        }
       }
     }
   ]
