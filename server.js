@@ -13,16 +13,26 @@ const Stripe = require('stripe');
 const cron = require('node-cron');
 const { PrismaClient, Prisma } = require('@prisma/client');
 
-const SECRET_KEY = 'your-secret-key';
-const DB_PATH = path.join(__dirname, 'users.db');
-const OPENAI_API_KEY = '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';
-const STRIPE_SECRET_KEY = "sk_test_51GrL6gLRSbKrHZ7okKSRfteML7iozGLImfVjZ3ZNJbBznw6oCBUuJGDRCq3V0PzGTcg4LelrECDdJzRKDW0IDNTI00ydvBdSio";
+const SECRET_KEY = process.env.SECRET_KEY || 'a82f7893280a01ada514b37f412a4e78';
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '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';
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY ||  'sk_test_51GrL6gLRSbKrHZ7okKSRfteML7iozGLImfVjZ3ZNJbBznw6oCBUuJGDRCq3V0PzGTcg4LelrECDdJzRKDW0IDNTI00ydvBdSio';
+const STRIPE_SIGNING_SECRET = process.env.STRIPE_SIGNING_SECRET || 'whsec_e4d12a345072f49037b15429a1fb9ab85260165949395d45454cf1310070491b';
 
 const app = express();
 const stripe = new Stripe(STRIPE_SECRET_KEY);
 const prisma = new PrismaClient();
 let stripePriceMap;
 
+const PORT = 8080 || process.env.PORT;
+app.locals.STRIPE_PUBLIC_KEY = process.env.STRIPE_PUBLIC_KEY || 'pk_test_51GrL6gLRSbKrHZ7oQXVesBOd4EQhqYOYkVu0NVJFJa2AS2aLuJbyAyTgcmcpgyWlvAYJyZAuAoIiUpr476yi46gM00bHiFr6y2';
+app.locals.HOST = process.env.HOST || `http://localhost:${PORT}`;
+
+app.use(express.json({
+  limit: '5mb',
+  verify: (req, res, buf) => {
+    req.rawBody = buf.toString();
+  },
+}));
 app.use(session({
   secret: SECRET_KEY, // replace with a strong secret
   resave: false,
@@ -49,6 +59,55 @@ cron.schedule('0 0 1 * *', async () => {
   await resetSubscriptionUsage();
 });
 
+// Middleware function for JWT token verification
+function verifyToken(req, res, next) {
+  const token = req.headers['authorization']?.split(' ')[1] || req.cookies.auth_token;
+  if (!token) {
+    if (req.ajax) {
+      return res.status(401).json({ error: 'Missing token' });
+    } else {
+      return res.redirect(`/log-in?next=${req.originalUrl}`);
+    }
+  }
+
+  try {
+    jwt.verify(token, SECRET_KEY);
+    const decoded = jwt.decode(token);
+    req.token = token;
+    req.email = decoded.email;
+    next(); // Move to the next middleware or route
+  } catch (err) {
+    if (req.ajax) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    } else {
+      return res.redirect(`/log-in?next=${req.originalUrl}`);
+    }
+  }
+}
+
+async function resetSubscriptionUsage() {
+  await prisma.user.updateMany({
+    data: {
+      queryUsageThisMonth: 0,
+    },
+  });
+}
+
+Array.prototype.lastAndPop = function() {
+  const last = this[this.length - 1];
+  _ = this.pop();
+  return last;
+}
+
+String.prototype.toTitleCase = function() {
+  return this.charAt(0).toUpperCase() + this.slice(1);
+}
+
+Date.prototype.toCustomDateString = function() {
+  const options = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' };
+  return this.toLocaleDateString('en-US', options).replace(',', ',');
+};
+
 app.get('/log-in', (req, res) => {
   res.render('login', { error: req.flash('loginError').lastAndPop(), referer: req.query.referer || req.query.next });
 });
@@ -62,8 +121,20 @@ app.get('/log-out', (req, res) => {
   res.redirect('/log-in');
 });
 
+app.use('/subscription*', verifyToken);
+
 app.get('/subscription', (req, res) => {
-  res.render('pay/main', { error: req.flash('payError').lastAndPop(), plan: req.query.plan, period: req.query.period });
+  const user = prisma.user.findUnique({
+    where: {
+      email: req.email,
+    },
+  });
+
+  if (user.stripeSubscriptionId) {
+    res.redirect('/account');
+  } else {
+    res.render('pay/main', { error: req.flash('payError').lastAndPop(), plan: req.query.plan, period: req.query.period });
+  }
 });
 
 app.get('/subscription/start', (req, res) => {
@@ -88,6 +159,165 @@ app.post('/subscription/start', async (req, res) => {
 
 app.get('/subscription/complete', (req, res) => {
   res.render('pay/complete', { error: req.flash('payError').lastAndPop() });
+});
+
+app.get('/subscription/cancel', async (req, res) => {
+  const email = req.email;
+
+  try {
+    const user = await prisma.user.findUniqueOrThrow({
+      where: {
+        email,
+      },
+    });
+
+    if (user.currentPlan == 'free') {
+      req.flash('accountError', 'You are already on the free plan.');
+      return res.redirect('/account');
+    }
+
+    // await stripe.subscriptions.cancel(user.stripeSubscriptionId)
+    await stripe.subscriptions.update(user.stripeSubscriptionId, {
+      cancel_at_period_end: true,
+    });
+
+    const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+    await prisma.user.update({
+      where: {
+        id: user.id,
+      },
+      data: {
+        expiresAt: new Date(subscription.current_period_end * 1_000),
+        renewsAt: null,
+      },
+    });
+
+    res.redirect('/account');
+  } catch (error) {
+    console.error(error);
+    req.flash('accountError', 'Unable to cancel subscription.');
+    return res.redirect('/account');
+  }
+});
+
+app.get('/subscription/update', async (req, res) => {
+  const { plan, period = 'monthly' } = req.query;
+  const email = req.email;
+
+  if (!verifyPaidPlan(plan)) {
+    req.flash('accountError', 'Invalid plan.');
+    return res.redirect('/account');
+  }
+
+  if (!verifyPeriod(period)) {
+    req.flash('accountError', 'Invalid subscription period.');
+    return res.redirect('/account');
+  }
+
+  try {
+    const user = await prisma.user.findUniqueOrThrow({
+      where: {
+        email,
+      },
+    });
+
+    if (!user.stripeSubscriptionId) {
+      return res.redirect(`/subscription/start?plan=${plan}`);
+    }
+
+    const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+    await stripe.subscriptions.update(user.stripeSubscriptionId, {
+      cancel_at_period_end: false,
+      items: [{
+        id: subscription.items.data[0].id,
+        price: stripePriceMap[plan],
+      }],
+    });
+
+    await prisma.user.update({
+      where: {
+        id: user.id,
+      },
+      data: {
+        currentPlan: plan,
+        expiresAt: null,
+        renewsAt: new Date(subscription.current_period_end * 1_000),
+      },
+    });
+
+    res.redirect('/account');
+  } catch (error) {
+    console.error(error);
+    req.flash('accountError', 'Unable to update subscription.');
+    return res.redirect('/account');
+  }
+});
+
+app.post('/subscription/charge', async (req, res) => {
+  const { plan, period = 'monthly' } = {...req.body, ...req.query};
+  const email = req.email;
+
+  if (!verifyPaidPlan(plan)) {
+    return res.status(400).json({ error: 'Invalid plan.' });
+  }
+
+  if (!verifyPeriod(period)) {
+    return res.status(400).json({ error: 'Invalid subscription period.' });
+  }
+
+  const amount = planMap[plan].period[period] * 100;
+
+  try {
+    const user = await prisma.user.findUniqueOrThrow({
+      where: {
+        email,
+      },
+    });
+
+    const subscription = await stripe.subscriptions.create({
+      customer: user.stripeCustomerId,
+      items: [{
+        price: stripePriceMap[plan],
+      }],
+      payment_behavior: 'default_incomplete',
+      expand: ['latest_invoice.payment_intent'],
+      // trial_end or trial_end_days for a free trial
+    });
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: {
+          id: user.id,
+        },
+        data: {
+          stripeSubscriptionId: subscription.id,
+        },
+      }),
+      prisma.payment.create({
+        data: {
+          plan,
+          period,
+          amount,
+          stripeId: subscription.latest_invoice.payment_intent.id,
+          user: {
+            connect: {
+              id: user.id,
+            },
+          },
+        },
+      }),
+    ], {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    })
+    
+    res.send({
+      subscriptionId: subscription.id,
+      clientSecret: subscription.latest_invoice.payment_intent.client_secret,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(400).json({ error: 'Unable to create subscription.' });
+  }
 });
 
 app.post('/sign-up', async (req, res) => {
@@ -155,40 +385,6 @@ app.post('/log-in', async (req, res) => {
   }
 });
 
-// Middleware function for JWT token verification
-function verifyToken(req, res, next) {
-  const token = req.headers['authorization']?.split(' ')[1] || req.cookies.auth_token;
-  if (!token) {
-    if (req.ajax) {
-      return res.status(401).json({ error: 'Missing token' });
-    } else {
-      return res.redirect(`/log-in?next=${req.originalUrl}`);
-    }
-  }
-
-  try {
-    jwt.verify(token, SECRET_KEY);
-    const decoded = jwt.decode(token);
-    req.token = token;
-    req.email = decoded.email;
-    next(); // Move to the next middleware or route
-  } catch (err) {
-    if (req.ajax) {
-      return res.status(401).json({ error: 'Invalid or expired token' });
-    } else {
-      return res.redirect(`/log-in?next=${req.originalUrl}`);
-    }
-  }
-}
-
-async function resetSubscriptionUsage() {
-  await prisma.user.updateMany({
-    data: {
-      queryUsageThisMonth: 0,
-    },
-  });
-}
-
 app.get('/', (req, res) => {
   res.redirect('/account');
 });
@@ -196,11 +392,20 @@ app.get('/', (req, res) => {
 app.use('/account', verifyToken);
 app.get('/account', async (req, res) => {
   const email = req.email;
-  const user = await prisma.user.findUniqueOrThrow({
-    where: {
-      email,
-    },
-  });
+  let user;
+
+  try {
+    user = await prisma.user.findUniqueOrThrow({
+      where: {
+        email,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    // NB: Using the loginError flash message instead of accountError for since we're redirecting to the login page
+    req.flash('loginError', 'Unable to retrieve account info. Please log in again.');
+    return res.redirect('/log-in');
+  }
 
   res.render('account', { error: req.flash('accountError').lastAndPop(), user: {...user, maxQueriesPerMonth: planMap[user.currentPlan].queries} });
 });
@@ -286,176 +491,43 @@ const planMap = {
   },
 };
 
-Array.prototype.lastAndPop = function() {
-  const last = this[this.length - 1];
-  _ = this.pop();
-  return last;
-}
-
-String.prototype.toTitleCase = function() {
-  return this.charAt(0).toUpperCase() + this.slice(1);
-}
-
-app.use('/subscription/cancel', verifyToken);
-app.get('/subscription/cancel', async (req, res) => {
-  const email = req.email;
-
-  try {
-    const user = await prisma.user.findUniqueOrThrow({
-      where: {
-        email,
-      },
-    });
-
-    await stripe.subscriptions.cancel(user.stripeSubscriptionId)
-    // await stripe.subscriptions.update(user.stripeSubscriptionId, {
-    //   cancel_at_period_end: true,
-    // });
-
-    res.redirect('/account');
-  } catch (error) {
-    console.error(error);
-    req.flash('accountError', 'Unable to cancel subscription.');
-    return res.redirect('/account');
-  }
-});
-
-app.use('/subscription/update', verifyToken);
-app.get('/subscription/update', async (req, res) => {
-  const { plan, period = 'monthly' } = req.query;
-  const email = req.email;
-
-  if (!verifyPaidPlan(plan)) {
-    req.flash('accountError', 'Invalid plan.');
-    return res.redirect('/account');
-  }
-
-  if (!verifyPeriod(period)) {
-    req.flash('accountError', 'Invalid subscription period.');
-    return res.redirect('/account');
-  }
-
-  try {
-    const user = await prisma.user.findUniqueOrThrow({
-      where: {
-        email,
-      },
-    });
-
-    const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
-    await stripe.subscriptions.update(user.stripeSubscriptionId, {
-      cancel_at_period_end: false,
-      items: [{
-        id: subscription.items.data[0].id,
-        price: stripePriceMap[plan],
-      }],
-    });
-
-    await prisma.user.update({
-      where: {
-        id: user.id,
-      },
-      data: {
-        currentPlan: plan,
-      },
-    });
-
-    res.redirect('/account');
-  } catch (error) {
-    console.error(error);
-    req.flash('accountError', 'Unable to update subscription.');
-    return res.redirect('/account');
-  }
-});
-
-app.use('/subscription/charge', verifyToken);
-app.post('/subscription/charge', async (req, res) => {
-  const { plan, period = 'monthly' } = req.body;
-  const email = req.email;
-
-  if (!verifyPaidPlan(plan)) {
-    return res.status(400).json({ error: 'Invalid plan.' });
-  }
-
-  if (!verifyPeriod(period)) {
-    return res.status(400).json({ error: 'Invalid subscription period.' });
-  }
-
-  const amount = planMap[plan].period[period] * 100;
-
-  try {
-    const user = await prisma.user.findUniqueOrThrow({
-      where: {
-        email,
-      },
-    });
-
-    const subscription = await stripe.subscriptions.create({
-      customer: user.stripeCustomerId,
-      items: [{
-        price: stripePriceMap[plan],
-      }],
-      payment_behavior: 'default_incomplete',
-      expand: ['latest_invoice.payment_intent'],
-    });
-
-    await prisma.$transaction([
-      prisma.user.update({
-        where: {
-          id: user.id,
-        },
-        data: {
-          stripeSubscriptionId: subscription.id,
-        },
-      }),
-      prisma.payment.create({
-        data: {
-          plan,
-          period,
-          amount,
-          stripeId: subscription.latest_invoice.payment_intent.id,
-          user: {
-            connect: {
-              id: user.id,
-            },
-          },
-        },
-      }),
-    ], {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    })
-    
-    res.send({
-      subscriptionId: subscription.id,
-      clientSecret: subscription.latest_invoice.payment_intent.client_secret,
-    });
-  } catch (error) {
-    console.error(error);
-    return res.status(400).json({ error: 'Unable to create subscription.' });
-  }
-});
-
 // TODO: Validate that the request is coming from stripe
 app.post('/stripe-webhook', async (req, res) => {
-  console.log('Received webhook');
-  let event = req.body;
-  const dataObject = event.data.object;
-  const paymentIntentId = dataObject.payment_intent;
-  const subscriptionId = dataObject.subscription;
+  const signature = req.headers['stripe-signature'];
+  let event;
 
   try {
+    event = stripe.webhooks.constructEvent(req.rawBody, signature, STRIPE_SIGNING_SECRET);
+  } catch (err) {
+    console.error(`Error verifying webhook: ${err}`);
+    return res.status(400).json({ error: "Unable to verify the webhook's authenticity" });
+  }
+
+  console.log(`Received webhook of ${event.type} from ${req.ip}`);
+
+  try {
+    const dataObject = event.data.object;
+    const paymentIntentId = dataObject.payment_intent;
+    const subscriptionId = dataObject.subscription;
+    let subscription, user;
+
+    if (subscriptionId) {
+      subscription = await stripe.subscriptions.retrieve(subscriptionId, {
+        expand: ['latest_invoice.payment_intent'],
+      });
+  
+      user = await prisma.user.findUniqueOrThrow({
+        where: {
+          stripeCustomerId: subscription.customer,
+        },
+      });
+    }
+
     switch (event.type) {
       case 'invoice.payment_succeeded': {
         if (dataObject.billing_reason == 'subscription_create') {
           // Find user directly by the stripeId of the payment
-          const userWithPayment = await prisma.payment.findUniqueOrThrow({
-            where: {
-              stripeId: paymentIntentId,
-            },
-            select: {
-              user: true,
-            },
-          });
+          const plan = subscription.items.data[0].price.lookup_key;
 
           await prisma.$transaction([
             prisma.payment.update({
@@ -470,15 +542,15 @@ app.post('/stripe-webhook', async (req, res) => {
             }),
             prisma.user.update({
               where: {
-                id: userWithPayment.user.id,
+                id: user.id,
               },
               data: {
                 currentPlan: plan,
+                expiresAt: null,
+                renewsAt: new Date(subscription.current_period_end * 1_000),
               },
             }),
-          ], {
-            isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-          });
+          ]);
 
           const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
           await stripe.subscriptions.update(subscriptionId, {
@@ -487,41 +559,34 @@ app.post('/stripe-webhook', async (req, res) => {
         } else if (dataObject.billing_reason == 'subscription_update') {
           // TODO: Modify user benefits when upgraded, downgraded or cancelled
           // Possible statuses: incomplete, incomplete_expired, trialing, active, past_due, canceled, or unpaid.
-          const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-
           if (subscription.status == 'canceled') {
             await prisma.user.update({
               where: {
-                stripeCustomerId: subscription.customer,
+                id: user.id,
               },
               data: {
                 currentPlan: 'free',
+                expiresAt: new Date(subscription.current_period_end * 1_000),
+                renewsAt: null,
               },
             });
           } else if (subscription.status == 'active') {
             const plan = subscription.items.data[0].price.lookup_key; // Assuming plan is determined by lookup_key
-            const user = prisma.user.findUniqueOrThrow({
-              where: {
-                stripeCustomerId: subscription.customer,
-              },
-            });
 
             await prisma.user.update({
               where: { 
                 id: user.id 
               },
               data: { 
-                currentPlan: plan
+                currentPlan: plan,
+                expiresAt: null,
+                renewsAt: new Date(subscription.current_period_end * 1_000),
               },
             });
           } else {
             console.error(`Unhandled subscription status ${subscription.status}`);
           }
         } else if (dataObject.billing_reason == 'subscription_cycle') {
-          const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
-            expand: ['latest_invoice.payment_intent'],
-          });
-
           const amount = subscription.items.data[0].plan.amount;
           const plan = subscription.items.data[0].price.lookup_key;
           const currency = subscription.items.data[0].plan.currency;
@@ -543,6 +608,16 @@ app.post('/stripe-webhook', async (req, res) => {
                 },
               },
               isAutoRenewal: true,
+            },
+          });
+
+          await prisma.user.update({
+            where: {
+              id: user.id,
+            },
+            data: {
+              expiresAt: null,
+              renewsAt: new Date(subscription.current_period_end * 1_000),
             },
           });
         }
@@ -600,7 +675,6 @@ app.all('/ping', (req, res) => {
   res.json({ message: 'pong!' });
 });
 
-const PORT = 8080 || process.env.PORT;
 let SALT;
 
 async function main() {

@@ -20,7 +20,11 @@ html
 
         .account-item
           h3 Current Plan
-          p #{user.currentPlan.toTitleCase()}
+          p #{user.currentPlan.toTitleCase()} 
+            if user.expiresAt
+              | (Expires on #{user.expiresAt.toCustomDateString()})
+            if user.renewsAt
+              | (Renews on #{user.renewsAt.toCustomDateString()})
             div(style="margin-top: 10px;")
               if user.currentPlan == 'free'
                 a(href="/subscription/update?plan=basic") Upgrade to Basic
@@ -28,12 +32,14 @@ html
                 a(href="/subscription/update?plan=pro") Upgrade to Pro
               if user.currentPlan == 'pro'
                 a(href="/subscription/update?plan=basic") Downgrade to Basic
-              if ['basic', 'pro'].includes(user.currentPlan)
+              if ['basic', 'pro'].includes(user.currentPlan) && user.renewsAt && !user.expiresAt
                 a(href="/subscription/cancel") Cancel #{user.currentPlan.toTitleCase()}
+              else if user.currentPlan != 'free'
+                a(href="/subscription/update?plan=basic") Renew #{user.currentPlan.toTitleCase()}
 
         .account-item
           h3 Queries This Month
-          p #{user.queryUsageThisMonth} / #{user.maxQueriesPerMonth}
+          p #{user.queryUsageThisMonth.toLocaleString()} / #{user.maxQueriesPerMonth.toLocaleString()}
 
         .account-item
           a(href="/log-out") Log out

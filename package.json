@@ -21,7 +21,9 @@
   "scripts": {
     "start": "nodemon server.js",
     "migrate": "prisma migrate dev --name init",
-    "initDatabase": "prisma db push"
+    "formatSchema": "prisma format",
+    "initDatabase": "prisma db push",
+    "initPlans": "stripe fixtures seed.json"
   },
   "engines": {
     "node": "19.6.0"
