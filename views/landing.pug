@@ -1,0 +1,133 @@
+doctype html
+html(lang="en")
+  head
+    meta(charset="UTF-8")
+    meta(name="viewport", content="width=device-width, initial-scale=1.0")
+    title Askbase | Talk to your database
+    meta(name="description", content="Askbase, talk to your database.")
+    link(rel="stylesheet", href="/css/styles.css")
+  body
+    header
+      .wide-container.header
+        .logo-container
+          a.href(href="/")
+            img(src="/images/logo.png", alt="Askbase Logo" height="64" width="64").logo
+        .nav-container
+          if user
+            a(href="/account").account-link Account
+          else
+            a(href="/log-in").login-link Log in
+            a(href="/sign-up").signup-link Sign up
+
+    .wide-container.center
+      h1 Askbase
+      p Make complex database queries simple with our AI-powered Chrome extension.
+      //- Use an image as a button for the Chrome extension
+      a(href="https://chrome.google.com/webstore/detail/askbase-extension-id" target="_blank" rel="noopener noreferrer")
+        img(src="/images/chrome_bordered.png" alt="Get the Extension" style="cursor:pointer;" height="64").btn
+      
+    .wide-container.center
+      h2 Plans
+      //- p Select the plan that best fits your needs.
+          
+      .plans
+        each value, name in planMap
+          .plan(class=(user && user.currentPlan === name) ? 'selected' : '')
+            h3 #{name.toTitleCase()} Plan
+            if value.period.monthly > 0
+              p(style="font-size: 24px;") $#{value.period.monthly} / month
+            else
+              p(style="font-size: 24px;") Free
+            ul
+              each benefit in value.benefits
+                li #{benefit}
+            
+            if user && user.currentPlan !== name
+              a.button(href=`/subscription/update?plan=${name}`) Switch to #{name.toTitleCase()}
+            else
+              if !user && name !== 'free'
+                a.button(href=`/sign-up?next=/subscription/start?plan=${name}`) Sign up for #{name.toTitleCase()}
+              else if !user && name === 'free' 
+                a.button(href="/sign-up") Start for Free
+             
+    footer
+      .wide-container.center
+        p © #{new Date().getFullYear()} Askbase. All rights reserved.
+        p 
+          a(href="/terms").link Terms
+  style.
+    .wide-container {
+      margin-right: 12px;
+      margin-left: 12px; /* Adjusted from margin to padding for internal spacing */
+    }
+
+    a.button {
+      margin-top: 10px;
+    }
+
+    .nav-container {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+    }
+
+    .logo-container {
+      float: left;
+      margin-right: auto;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      margin-left: 4px; /* Adjust margin since the logo already has padding inside */
+    }
+
+    .account-link, .login-link, .signup-link {
+      margin-left: 20px;
+      text-decoration: none;
+      color: #0073b1;
+    }
+
+    .account-link:hover, .login-link:hover, .signup-link:hover {
+      color: #005b8e;
+    }
+
+    /* Plan cards responsive layout */
+    .plans {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center; /* Adjust this to manage the space between plans */
+    }
+
+    .plans.center {
+      display: flex;
+      flex-direction: row;
+    }
+
+    .plan {
+      box-sizing: border-box;
+      padding: 20px;
+      margin-bottom: 20px; /* Space between plans */
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      width: 100%; /* Full width on small screens */
+    }
+
+    /* Responsive adjustments */
+    @media (min-width: 768px) { /* For larger devices */
+      .plan {
+        /* Set to take up one-third of the container width, without subtracting margin */
+        flex: 0 0 calc(33.3333% - 40px);
+        /* Apply margins only to the sides, not affecting the flex basis calculation */
+        margin: 0 10px 20px 10px; /* Adjusted to ensure it applies evenly on all sides */
+        width: auto; /* Adjust width to auto to allow flex sizing to take effect */
+      }
+    }
+
+    .selected {
+      border-color: #0073b1;
+      background-color: #f0f8ff;
+    }
+

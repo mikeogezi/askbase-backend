@@ -52,6 +52,25 @@ button:hover {
   background-color: #005b8e;
 }
 
+a.button {
+  width: 100%;
+  padding: 10px;
+  background-color: #0073b1;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: large;
+  text-align: center; /* Ensures text is centered, if it's not by default */
+  display: inline-block; /* Ensures that <a> behaves like a block while allowing width */
+  text-decoration: none; /* Removes underline from <a> elements */
+  box-sizing: border-box; /* Ensures padding is included in the width */
+}
+
+a.button:hover {
+  background-color: #005b8e;
+}
+
 .error {
   color: red;
   text-align: center;

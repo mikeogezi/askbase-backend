@@ -1,6 +1,3 @@
-// PUBLIC_KEY = "pk_test_51GrL6gLRSbKrHZ7oQXVesBOd4EQhqYOYkVu0NVJFJa2AS2aLuJbyAyTgcmcpgyWlvAYJyZAuAoIiUpr476yi46gM00bHiFr6y2";
-// HOST = "http://localhost:8080/";
-
 const stripe = Stripe(PUBLIC_KEY);
 
 let elements;

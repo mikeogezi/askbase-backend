@@ -85,6 +85,20 @@ function verifyToken(req, res, next) {
   }
 }
 
+function getEmailOrNull(req) {
+  const token = req.headers['authorization']?.split(' ')[1] || req.cookies.auth_token;
+  if (!token) {
+    return null;
+  }
+
+  try {
+    const decoded = jwt.decode(token);
+    return decoded.email;
+  } catch (err) {
+    return null;
+  }
+}
+
 async function resetSubscriptionUsage() {
   await prisma.user.updateMany({
     data: {
@@ -107,6 +121,10 @@ Date.prototype.toCustomDateString = function() {
   const options = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' };
   return this.toLocaleDateString('en-US', options).replace(',', ',');
 };
+
+app.get('/terms', (req, res) => {
+  res.render('terms');
+});
 
 app.get('/log-in', (req, res) => {
   res.render('login', { error: req.flash('loginError').lastAndPop(), referer: req.query.referer || req.query.next });
@@ -138,7 +156,13 @@ app.get('/subscription', (req, res) => {
 });
 
 app.get('/subscription/start', (req, res) => {
-  res.render('pay/begin', { error: req.flash('payError').lastAndPop(), plan: req.query.plan, period: req.query.period });
+  res.render('pay/begin', { 
+    error: req.flash('payError').lastAndPop(), 
+    plan: req.query.plan, 
+    period: req.query.period, 
+    planMap,
+    hidePlanPeriods: true
+  });
 });
 
 app.post('/subscription/start', async (req, res) => {
@@ -203,6 +227,10 @@ app.get('/subscription/cancel', async (req, res) => {
 app.get('/subscription/update', async (req, res) => {
   const { plan, period = 'monthly' } = req.query;
   const email = req.email;
+
+  if (plan == 'free') {
+    return res.redirect('/subscription/cancel');
+  }
 
   if (!verifyPaidPlan(plan)) {
     req.flash('accountError', 'Invalid plan.');
@@ -385,8 +413,18 @@ app.post('/log-in', async (req, res) => {
   }
 });
 
-app.get('/', (req, res) => {
-  res.redirect('/account');
+app.get('/', async (req, res) => {
+  const email = await getEmailOrNull(req);
+  const user = email ? await prisma.user.findUnique({
+    where: {
+      email,
+    },
+  }) : null;
+  res.render('landing', { hidePlanPeriods: true, planMap, user });
+});
+
+app.get('/plans', (req, res) => {
+  res.render('plans');
 });
 
 app.use('/account', verifyToken);
@@ -468,26 +506,40 @@ async function initStripePriceMap() {
 }
 
 const planMap = {
-  basic: {
-    period: {
-      monthly: 10, 
-      // yearly: 7,  
-    },
-    queries: 1000,
-  },
-  pro: {
-    period: {
-      monthly: 20, 
-      // yearly: 14,
-    },
-    queries: 10000,
-  },
   free: {
     period: {
       monthly: 0,
-      // yearly: 0,
+      yearly: 0,
     },
     queries: 100,
+    benefits: [
+      "100 queries per month",
+      "Access to basic features",
+    ],
+  },
+  basic: {
+    period: {
+      monthly: 10,
+      yearly: 7,
+    },
+    queries: 1_000,
+    benefits: [
+      "1,000 queries per month",
+      "Community support",
+      "GPT-3.5",
+    ],
+  },
+  pro: {
+    period: {
+      monthly: 20,
+      yearly: 14,
+    },
+    queries: 10_000,
+    benefits: [
+      "10,000 queries per month",
+      "Priority support",
+      "GPT-4",
+    ],
   },
 };
 
