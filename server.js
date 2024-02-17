@@ -141,8 +141,8 @@ app.get('/log-out', (req, res) => {
 
 app.use('/subscription*', verifyToken);
 
-app.get('/subscription', (req, res) => {
-  const user = prisma.user.findUnique({
+app.get('/subscription', async (req, res) => {
+  const user = await prisma.user.findUnique({
     where: {
       email: req.email,
     },
@@ -157,7 +157,9 @@ app.get('/subscription', (req, res) => {
 
 app.get('/subscription/start', async (req, res) => {
   const user = await prisma.user.findUnique({
-    email: req.email,
+    where: {
+      email: req.email,
+    },
   });
 
   if (user.renewsAt || user.expiresAt) {
