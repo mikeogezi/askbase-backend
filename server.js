@@ -155,7 +155,15 @@ app.get('/subscription', (req, res) => {
   }
 });
 
-app.get('/subscription/start', (req, res) => {
+app.get('/subscription/start', async (req, res) => {
+  const user = await prisma.user.findUnique({
+    email: req.email,
+  });
+
+  if (user.renewsAt || user.expiresAt) {
+    return res.redirect('/account')
+  }
+
   res.render('pay/begin', { 
     error: req.flash('payError').lastAndPop(), 
     plan: req.query.plan, 
