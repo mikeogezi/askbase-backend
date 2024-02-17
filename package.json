@@ -20,6 +20,7 @@
   },
   "scripts": {
     "start": "nodemon server.js",
+    "deploy_migration_then_start": "prisma migrate deploy && nodemon server.js",
     "migrate": "prisma migrate dev --name init",
     "formatSchema": "prisma format",
     "initDatabase": "prisma db push",
