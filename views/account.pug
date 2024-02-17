@@ -22,7 +22,11 @@ html
           h3 Current Plan
           p #{user.currentPlan.toTitleCase()} 
             if user.expiresAt
-              | (Expires on #{user.expiresAt.toCustomDateString()})
+              - var now = new Date()
+              if expiresAt < now
+                | (Expired at #{user.expiresAt.toCustomDateString()})
+              else
+                | (Expires on #{user.expiresAt.toCustomDateString()})
             if user.renewsAt
               | (Renews on #{user.renewsAt.toCustomDateString()})
             div(style="margin-top: 10px;")
