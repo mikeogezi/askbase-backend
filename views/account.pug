@@ -23,7 +23,8 @@ html
           p #{user.currentPlan.toTitleCase()} 
             if user.expiresAt
               - var now = new Date()
-              if expiresAt < now
+              - var expired = now > user.expiresAt
+              if expired
                 | (Expired at #{user.expiresAt.toCustomDateString()})
               else
                 | (Expires on #{user.expiresAt.toCustomDateString()})
