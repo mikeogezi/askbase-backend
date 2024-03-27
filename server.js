@@ -734,7 +734,7 @@ app.post('/stripe-webhook', async (req, res) => {
 });
 
 app.all('/ping', (req, res) => {
-  res.json({ message: 'pong!' });
+  res.json({ message: `Pong @ ${new Date().toLocaleString()}!` });
 });
 
 let SALT;
