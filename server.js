@@ -122,10 +122,6 @@ Date.prototype.toCustomDateString = function() {
   return this.toLocaleDateString('en-US', options).replace(',', ',');
 };
 
-app.get('/terms', (req, res) => {
-  res.render('terms');
-});
-
 app.get('/log-in', (req, res) => {
   res.render('login', { error: req.flash('loginError').lastAndPop(), referer: req.query.referer || req.query.next });
 });
@@ -434,7 +430,15 @@ app.get('/', async (req, res) => {
 });
 
 app.get('/plans', (req, res) => {
-  res.render('plans');
+  res.redirect('/#plans');
+});
+
+app.get('/terms', (req, res) => {
+  res.render('legal/terms');
+});
+
+app.get('/privacy-policy', (req, res) => {
+  res.render('legal/privacyPolicy');
 });
 
 app.use('/account', verifyToken);
