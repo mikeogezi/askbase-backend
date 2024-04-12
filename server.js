@@ -12,6 +12,9 @@ const cors = require('cors');
 const Stripe = require('stripe');
 const cron = require('node-cron');
 const { PrismaClient, Prisma } = require('@prisma/client');
+const util = require('util');
+const pngToIco = require('png-to-ico');
+const favicon = require('serve-favicon');
 
 const SECRET_KEY = process.env.SECRET_KEY || 'a82f7893280a01ada514b37f412a4e78';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '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';
@@ -26,6 +29,11 @@ let stripePriceMap;
 const PORT = 8080 || process.env.PORT;
 app.locals.STRIPE_PUBLIC_KEY = process.env.STRIPE_PUBLIC_KEY || 'pk_test_51GrL6gLRSbKrHZ7oQXVesBOd4EQhqYOYkVu0NVJFJa2AS2aLuJbyAyTgcmcpgyWlvAYJyZAuAoIiUpr476yi46gM00bHiFr6y2';
 app.locals.HOST = process.env.HOST || `http://localhost:${PORT}`;
+
+(async () => {
+  const buf = await pngToIco(path.join(__dirname, 'public/images/logo.png'));
+  app.use(favicon(buf));
+})();
 
 app.use(express.json({
   limit: '5mb',
@@ -121,10 +129,6 @@ Date.prototype.toCustomDateString = function() {
   const options = { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' };
   return this.toLocaleDateString('en-US', options).replace(',', ',');
 };
-
-app.get('/terms', (req, res) => {
-  res.render('terms');
-});
 
 app.get('/log-in', (req, res) => {
   res.render('login', { error: req.flash('loginError').lastAndPop(), referer: req.query.referer || req.query.next });
@@ -434,7 +438,15 @@ app.get('/', async (req, res) => {
 });
 
 app.get('/plans', (req, res) => {
-  res.render('plans');
+  res.redirect('/#plans');
+});
+
+app.get('/terms', (req, res) => {
+  res.render('legal/terms');
+});
+
+app.get('/privacy-policy', (req, res) => {
+  res.render('legal/privacyPolicy');
 });
 
 app.use('/account', verifyToken);
@@ -734,7 +746,7 @@ app.post('/stripe-webhook', async (req, res) => {
 });
 
 app.all('/ping', (req, res) => {
-  res.json({ message: 'pong!' });
+  res.json({ message: `Pong @ ${new Date().toLocaleString()}!` });
 });
 
 let SALT;

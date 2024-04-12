@@ -1,5 +1,19 @@
 body {
-  font-family: Arial, sans-serif;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.wide-container {
+  margin-right: 12px;
+  margin-left: 12px; /* Adjusted from margin to padding for internal spacing */
+}
+
+.legal-container {
+  margin-right: 20px;
+  margin-left: 20px;
+}
+
+.legal-container h2 {
+  text-align: left;
 }
 
 .center {

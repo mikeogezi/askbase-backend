@@ -3,9 +3,10 @@ html(lang="en")
   head
     meta(charset="UTF-8")
     meta(name="viewport", content="width=device-width, initial-scale=1.0")
-    title Askbase | Talk to your database
-    meta(name="description", content="Askbase, talk to your database.")
+    title Askbase | Chat with your Metabase databases
+    meta(name="description", content="Askbase, chat with your Metabase databases.")
     link(rel="stylesheet", href="/css/styles.css")
+    link(rel="icon", href="/favicon.ico")
   body
     header
       .wide-container.header
@@ -23,10 +24,10 @@ html(lang="en")
       h1 Askbase
       p Make complex database queries simple with our AI-powered Chrome extension.
       //- Use an image as a button for the Chrome extension
-      a(href="https://chrome.google.com/webstore/detail/askbase-extension-id" target="_blank" rel="noopener noreferrer")
+      a(href="https://drive.google.com/file/d/11ueyxYDRTYMQpyhfttFTy2y7TdklLp-i/view?usp=sharing" target="_blank" rel="noopener noreferrer")
         img(src="/images/chrome_bordered.png" alt="Get the Extension" style="cursor:pointer;" height="64").btn
       
-    .wide-container.center
+    .wide-container.center#plans
       h2 Plans
       //- p Select the plan that best fits your needs.
           
@@ -54,13 +55,10 @@ html(lang="en")
       .wide-container.center
         p © #{new Date().getFullYear()} Askbase. All rights reserved.
         p 
-          a(href="/terms").link Terms
+          a(href="/terms").link Terms 
+        p 
+          a(href="/privacy-policy").link Privacy Policy
   style.
-    .wide-container {
-      margin-right: 12px;
-      margin-left: 12px; /* Adjusted from margin to padding for internal spacing */
-    }
-
     a.button {
       margin-top: 10px;
     }

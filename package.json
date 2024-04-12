@@ -14,7 +14,9 @@
     "langchain": "^0.0.153",
     "node-cron": "^3.0.3",
     "openai": "^4.8.0",
+    "png-to-ico": "^2.1.8",
     "pug": "^3.0.2",
+    "serve-favicon": "^2.5.0",
     "sqlite3": "^5.1.6",
     "stripe": "^13.7.0"
   },
