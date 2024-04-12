@@ -12,7 +12,7 @@ html(lang="en")
       .wide-container.header
         .logo-container
           a.href(href="/")
-            img(src="/images/logo.png", alt="Askbase Logo" height="64" width="64").logo
+            img(src="/images/logo.webp", alt="Askbase Logo" height="64" width="64").logo
         .nav-container
           if user
             a(href="/account").account-link Account
@@ -25,7 +25,10 @@ html(lang="en")
       p Make complex Metabase database queries simple with our AI-powered Chrome extension.
       //- Use an image as a button for the Chrome extension
       a(href="https://drive.google.com/file/d/11ueyxYDRTYMQpyhfttFTy2y7TdklLp-i/view?usp=sharing" target="_blank" rel="noopener noreferrer")
-        img(src="/images/chrome_bordered.png" alt="Get the Extension" style="cursor:pointer;" height="64").btn
+        img(src="/images/chrome_bordered.webp" alt="Get the Chrome Extension" style="cursor:pointer;" height="64").btn
+
+    .wide-container.center
+      img(src="/images/askbase_screenshot.webp", alt="Using Askbase", width="50%", style="border-radius: 5px; border: 1px solid #ccc; padding: 5px; margin: 20px 0;")
       
     .wide-container.center#plans
       h2 Plans
