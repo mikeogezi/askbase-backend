@@ -38,8 +38,8 @@ model User {
   stripeCustomerId     String    @unique
   stripeSubscriptionId String?   @unique
 
-  currentPlan         Plan @default(free)
-  queryUsageThisMonth Int  @default(0)
+  currentPlan         Plan    @default(free)
+  queryUsageThisMonth Int     @default(0)
   modelId             String? @default("gpt-3.5-turbo-16k")
 
   renewsAt  DateTime?
