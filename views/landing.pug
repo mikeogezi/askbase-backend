@@ -28,7 +28,7 @@ html(lang="en")
         img(src="/images/chrome_bordered.webp" alt="Get the Chrome Extension" style="cursor:pointer;" height="64").btn
 
     .wide-container.center
-      img(src="/images/askbase_screenshot.webp", alt="Using Askbase", width="50%", style="border-radius: 5px; border: 1px solid #ccc; padding: 5px; margin: 20px 0;")
+      img.screenshot(src="/images/askbase_screenshot.webp", alt="Using Askbase")
       
     .wide-container.center#plans
       h2 Plans
@@ -130,5 +130,42 @@ html(lang="en")
     .selected {
       border-color: #0073b1;
       background-color: #f0f8ff;
+    }
+
+    .screenshot {
+      width: 60%;
+      border-radius: 5px; 
+      border: 1px solid #ccc;
+      padding: 5px; 
+      margin: 20px 0 20px 0;
+    }
+
+    /* Increase width to 70% when the screen width is less than 800px */
+    @media (max-width: 1100px) {
+      .screenshot {
+        width: 70%;
+      }
+    }
+
+    /* Increase width to 70% when the screen width is less than 800px */
+    @media (max-width: 900px) {
+      .screenshot {
+        width: 75%;
+      }
+    }
+
+    
+    /* Increase width to 70% when the screen width is less than 800px */
+    @media (max-width: 800px) {
+      .screenshot {
+        width: 80%;
+      }
+    }
+
+    /* Increase width to 90% when the screen width is less than 500px */
+    @media (max-width: 500px) {
+      .screenshot {
+        width: 95%;
+      }
     }
 
